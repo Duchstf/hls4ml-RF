@@ -4,14 +4,27 @@
 Created on Fri Sep 20 11:00:45 2019
 
 @author: duc_hoang
+
 """
+import os,random
+os.environ["KERAS_BACKEND"] = "tensorflow"
 import tensorflow as tf
 import tensorboard
 import tensorflow.keras as keras
 
 from tensorflow.keras.models import model_from_json
 from tensorflow_model_optimization.sparsity import keras as sparsity
+import keras.models as models
 
+from keras.utils import np_utils
+import keras.models as models
+from keras.layers.core import Reshape,Dense,Dropout,Activation,Flatten
+from keras.layers.noise import GaussianNoise
+from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D
+from keras.layers.convolutional import Conv2D
+from keras.regularizers import *
+from keras.optimizers import adam
+import matplotlib.pyplot as plt
 import _pickle as cPickle
 import numpy as np
 
@@ -78,18 +91,34 @@ final_sparsity = 0.9
 end_step = np.ceil(1.0 * num_train_samples / batch_size).astype(np.int32) * nb_epoch
 print("End step: ", end_step)
 
-new_pruning_params = {
+pruning_params = {
     'pruning_schedule': sparsity.PolynomialDecay(initial_sparsity=initial_sparsity,
                                                  final_sparsity=final_sparsity,
-                                                 begin_step=0,
+                                                 begin_step=2000,
                                                  end_step=end_step,
                                                  frequency=100)
 }
 
-pruned_model = sparsity.prune_low_magnitude(model, **new_pruning_params)
+l = tf.keras.layers
+dr = 0.5 # dropout rate (%)
+pruned_model = models.Sequential()
+pruned_model.add(Reshape([1]+in_shp, input_shape=in_shp))
+pruned_model.add(sparsity.prune_low_magnitude(Conv2D(64, (2, 8), padding='valid', data_format="channels_first", 
+                                                     activation="relu", name="conv1", kernel_initializer='glorot_uniform'), **pruning_params))
+pruned_model.add(Dropout(dr))
+pruned_model.add(sparsity.prune_low_magnitude(Conv2D(32, (1, 32), padding='valid', data_format="channels_first", 
+                                                     activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params))
+pruned_model.add(Dropout(dr))
+pruned_model.add(Flatten())
+pruned_model.add(sparsity.prune_low_magnitude(Dense(128, activation='relu', kernel_initializer='he_normal', name="dense1"), **pruning_params))
+pruned_model.add(Dropout(dr))
+pruned_model.add(sparsity.prune_low_magnitude(Dense(len(classes), kernel_initializer='he_normal', name="dense2" ), **pruning_params))
+pruned_model.add(Activation('softmax'))
+pruned_model.compile(loss='categorical_crossentropy', optimizer='adam')
+
 pruned_model.summary()
 
-pruned_model.compile(loss='categorical_crossentropy', optimizer='adam')
+
 
 callbacks = [tf.keras.callbacks.TensorBoard(log_dir=logdir, profile_batch=0),
              sparsity.UpdatePruningStep(),
