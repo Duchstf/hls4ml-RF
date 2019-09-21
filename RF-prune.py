@@ -73,11 +73,11 @@ num_train_samples = X_train.shape[0]
 #==================PRUNE THE MODEL=====================
 
 # Model reconstruction from JSON file
-with open('./model/convmodrecnets_CNN2.json', 'r') as f:
+with open('./model/RF-CNN-full.json', 'r') as f:
     model = model_from_json(f.read())
 
 # Load weights into the new model
-model.load_weights('./model/convmodrecnets_CNN2_0.5.wts.h5')
+model.load_weights('./model/RF-CNN-full.h5')
 
 model.summary()
 
@@ -103,10 +103,10 @@ l = tf.keras.layers
 dr = 0.5 # dropout rate (%)
 pruned_model = tf.keras.Sequential([
         l.Reshape([1]+in_shp, input_shape=in_shp),
-        sparsity.prune_low_magnitude(l.Conv2D(64, (2, 8), padding='valid', data_format="channels_first", 
+        sparsity.prune_low_magnitude(l.Conv2D(64, (2, 8), padding='valid', data_format="channels_last", 
                                                      activation="relu", name="conv1", kernel_initializer='glorot_uniform'), **pruning_params),
         l.Dropout(dr),
-        sparsity.prune_low_magnitude(l.Conv2D(32, (1, 32), padding='valid', data_format="channels_first", 
+        sparsity.prune_low_magnitude(l.Conv2D(32, (1, 32), padding='valid', data_format="channels_last", 
                                                      activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
         l.Dropout(dr),
         l.Flatten(),
@@ -145,11 +145,11 @@ pruned_model = sparsity.strip_pruning(pruned_model)
 pruned_model.summary()
 
 # Save the model architecture
-with open('convmodrecnets_CNN2-pruned.json', 'w') as f:
+with open('RF-CNN-pruned-0.9.json', 'w') as f:
     f.write(pruned_model.to_json())
     
 # Save the weights
-model.save_weights('convmodrecnets_CNN2_0.5.wts-pruned.h5')
+model.save_weights('RF-CNN-pruned-0.9.h5')
 
 
 
