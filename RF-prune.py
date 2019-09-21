@@ -85,7 +85,7 @@ model.summary()
 
 # Set up some params 
 nb_epoch = 50     # number of epochs to train on
-batch_size = 1024  # training batch size
+batch_size = 128  # training batch size
 initial_sparsity = 0.0
 final_sparsity = 0.9
 end_step = np.ceil(1.0 * num_train_samples / batch_size).astype(np.int32) * nb_epoch
