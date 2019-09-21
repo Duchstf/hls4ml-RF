@@ -77,11 +77,11 @@ print("Using Keras version: ", keras.__version__)
 print(in_shp)
 dr = 0.5 # dropout rate (%)
 model = models.Sequential()
-model.add(Reshape([1]+in_shp, input_shape=in_shp))
+model.add(Reshape(in_shp+[1], input_shape=in_shp))
 # model.add(ZeroPadding2D((0, 2)))
-model.add(Conv2D(64, (2, 8), padding='valid', data_format="channels_first", activation="relu", name="conv1", kernel_initializer='glorot_uniform'))
+model.add(Conv2D(64, (2, 8), padding='valid', data_format="channels_last", activation="relu", name="conv1", kernel_initializer='glorot_uniform'))
 model.add(Dropout(dr))
-model.add(Conv2D(32, (1, 32), padding='valid', data_format="channels_first", activation="relu", name="conv2", kernel_initializer='glorot_uniform'))
+model.add(Conv2D(32, (1, 32), padding='valid', data_format="channels_last", activation="relu", name="conv2", kernel_initializer='glorot_uniform'))
 model.add(Dropout(dr))
 model.add(Flatten())
 model.add(Dense(128, activation='relu', kernel_initializer='he_normal', name="dense1"))
@@ -92,13 +92,17 @@ model.add(Activation('softmax'))
 model.compile(loss='categorical_crossentropy', optimizer='adam')
 model.summary()
 
+# Save the model architecture
+with open('./model/RF-CNN-full.json', 'w') as f:
+    f.write(model.to_json())
+
 #================TRAIN THE MODEL====================
 
 # Set up some params 
 nb_epoch = 50     # number of epochs to train on
 batch_size = 1024  # training batch size
 
-filepath = 'model/convmodrecnets_CNN2_0.5.wts.h5'
+filepath = 'model/RF-CNN-full.h5'
 
 history = model.fit(X_train,
     Y_train,
