@@ -31,6 +31,15 @@ import numpy as np
 import tempfile
 logdir = tempfile.mkdtemp()
 
+def print_model_to_json(keras_model, outfile_name):
+    outfile = open(outfile_name,'w')
+    jsonString = keras_model.to_json()
+    import json
+    with outfile:
+        obj = json.loads(jsonString)
+        json.dump(obj, outfile, sort_keys=True,indent=4, separators=(',', ': '))
+        outfile.write('\n')
+
 #==================PREPARE DATA=====================
 
 # Prepare the training data
@@ -85,7 +94,7 @@ model.summary()
 
 # Set up some params 
 nb_epoch = 50     # number of epochs to train on
-batch_size = 1024  # training batch size
+batch_size = 100  # training batch size
 initial_sparsity = 0.0
 final_sparsity = 0.9
 end_step = np.ceil(1.0 * num_train_samples / batch_size).astype(np.int32) * nb_epoch
@@ -94,7 +103,7 @@ print("End step: ", end_step)
 pruning_params = {
     'pruning_schedule': sparsity.PolynomialDecay(initial_sparsity=initial_sparsity,
                                                  final_sparsity=final_sparsity,
-                                                 begin_step=2000,
+                                                 begin_step=0,
                                                  end_step=end_step,
                                                  frequency=100)
 }
@@ -102,7 +111,7 @@ pruning_params = {
 l = tf.keras.layers
 dr = 0.5 # dropout rate (%)
 pruned_model = tf.keras.Sequential([
-        l.Reshape([1]+in_shp, input_shape=in_shp),
+        l.Reshape(in_shp+[1], input_shape=in_shp),
         sparsity.prune_low_magnitude(l.Conv2D(64, (2, 8), padding='valid', data_format="channels_last", 
                                                      activation="relu", name="conv1", kernel_initializer='glorot_uniform'), **pruning_params),
         l.Dropout(dr),
@@ -124,8 +133,7 @@ pruned_model.summary()
 
 
 
-callbacks = [tf.keras.callbacks.TensorBoard(log_dir=logdir, profile_batch=0),
-             sparsity.UpdatePruningStep(),
+callbacks = [sparsity.UpdatePruningStep(),
              sparsity.PruningSummaries(log_dir=logdir, profile_batch=0)
 ]
 
@@ -138,18 +146,17 @@ history = pruned_model.fit(X_train, Y_train,
 
 score = pruned_model.evaluate(X_test, Y_test, verbose=0)
 
-
+print("Test loss: ", score)
 
 #Save the model
 pruned_model = sparsity.strip_pruning(pruned_model)
 pruned_model.summary()
 
 # Save the model architecture
-with open('RF-CNN-pruned-0.9.json', 'w') as f:
-    f.write(pruned_model.to_json())
+print_model_to_json(pruned_model, 'RF-CNN-pruned-0.9.json')
     
 # Save the weights
-model.save_weights('RF-CNN-pruned-0.9.h5')
+pruned_model.save_weights('RF-CNN-pruned-0.9.h5')
 
 
 
