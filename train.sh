@@ -7,7 +7,9 @@
 #SBATCH --time=1:00:00
 #SBATCH --mem-per-cpu=5000
 
-conda activate mnist-training
+module load miniconda
+
+source activate mnist-training
 cd ~/RF/hls4ml-RF/
 python3 RF-prune.py
 
