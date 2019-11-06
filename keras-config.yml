@@ -1,0 +1,10 @@
+KerasJson: model/RF-CNN-full.json
+KerasH5:   model/RF-CNN-full.h5
+OutputDir: CNN-hls-rf
+ProjectName: CNN-hls
+XilinxPart: xc7vx690tffg1927-2
+ClockPeriod: 5
+
+IOType: io_parallel # options: io_serial/io_parallel
+ReuseFactor: 1
+DefaultPrecision: ap_fixed<18,8> 
