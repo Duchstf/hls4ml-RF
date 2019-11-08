@@ -1,5 +1,5 @@
-KerasJson: model/RF-CNN-full.json
-KerasH5:   model/RF-CNN-full.h5
+KerasJson: model/RF-CNN-pruned-0.9.json
+KerasH5:   model/RF-CNN-pruned-0.9.h5
 OutputDir: CNN-hls-rf
 ProjectName: CNN-hls
 XilinxPart: xc7vx690tffg1927-2
