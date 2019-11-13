@@ -11,7 +11,7 @@ module load miniconda
 
 source activate mnist-training
 cd ~/RF/hls4ml-RF/
-python3 RF-prune.py
+python3 RF-prune-CNN.py
 
 
 

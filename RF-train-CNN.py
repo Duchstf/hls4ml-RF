@@ -61,6 +61,10 @@ def to_onehot(yy):
 Y_train = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), train_idx)))
 Y_test = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), test_idx)))
 
+#Add empty dimension at the end for CONV input layer
+X_train = X_train.reshape(X_train.shape + (1,))
+X_test = X_test.reshape(X_test.shape + (1,))
+
 in_shp = list(X_train.shape[1:])
 print("X_train shape: ", X_train.shape)
 classes = mods
@@ -77,9 +81,7 @@ print("Using Keras version: ", keras.__version__)
 print(in_shp)
 dr = 0.5 # dropout rate (%)
 model = models.Sequential()
-model.add(Reshape(in_shp+[1], input_shape=in_shp))
-# model.add(ZeroPadding2D((0, 2)))
-model.add(Conv2D(64, (2, 8), padding='valid', data_format="channels_last", activation="relu", name="conv1", kernel_initializer='glorot_uniform'))
+model.add(Conv2D(64, (2, 8), padding='valid', data_format="channels_last", activation="relu", name="conv1", kernel_initializer='glorot_uniform', input_shape=in_shp))
 model.add(Dropout(dr))
 model.add(Conv2D(32, (1, 32), padding='valid', data_format="channels_last", activation="relu", name="conv2", kernel_initializer='glorot_uniform'))
 model.add(Dropout(dr))
@@ -88,7 +90,6 @@ model.add(Dense(128, activation='relu', kernel_initializer='he_normal', name="de
 model.add(Dropout(dr))
 model.add(Dense( len(classes), kernel_initializer='he_normal', name="dense2" ))
 model.add(Activation('softmax'))
-# model.add(Reshape([len(classes)]))
 model.compile(loss='categorical_crossentropy', optimizer='adam')
 model.summary()
 

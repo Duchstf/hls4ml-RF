@@ -73,6 +73,11 @@ def to_onehot(yy):
 Y_train = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), train_idx)))
 Y_test = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), test_idx)))
 
+#Add empty dimension at the end for CONV input layer
+X_train = X_train.reshape(X_train.shape + (1,))
+X_test = X_test.reshape(X_test.shape + (1,))
+
+#Take input shape
 in_shp = list(X_train.shape[1:])
 print("X_train shape: ", X_train.shape)
 classes = mods
@@ -111,9 +116,8 @@ pruning_params = {
 l = tf.keras.layers
 dr = 0.5 # dropout rate (%)
 pruned_model = tf.keras.Sequential([
-        l.Reshape(in_shp+[1], input_shape=in_shp),
-        sparsity.prune_low_magnitude(l.Conv2D(64, (2, 8), padding='valid', data_format="channels_last", 
-                                                     activation="relu", name="conv1", kernel_initializer='glorot_uniform'), **pruning_params),
+        sparsity.prune_low_magnitude(l.Conv2D(64, (2, 8), padding='valid', data_format="channels_last",
+						activation="relu", name="conv1", kernel_initializer='glorot_uniform',input_shape=in_shp), **pruning_params),
         l.Dropout(dr),
         sparsity.prune_low_magnitude(l.Conv2D(32, (1, 32), padding='valid', data_format="channels_last", 
                                                      activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
