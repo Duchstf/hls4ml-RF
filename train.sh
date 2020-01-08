@@ -7,11 +7,10 @@
 #SBATCH --time=1:00:00
 #SBATCH --mem-per-cpu=5000
 
-module load miniconda
-
-source activate mnist-training
+export PATH="/home/duchstf/miniconda3/bin:$PATH"
+source activate RF-training
 cd ~/RF/hls4ml-RF/
-python3 RF-prune-CNN.py
+python3 RF-prune-CNN-95.py
 
 
 
