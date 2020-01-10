@@ -24,7 +24,7 @@ from keras.layers import Dense, Dropout
 
 # Load the dataset ...
 # You will need to seperately download or generate this file
-Xd = cPickle.load(open("RML2016.10a_dict.pkl",'rb'), encoding="latin1")
+Xd = cPickle.load(open("../RML2016.10a_dict.pkl",'rb'), encoding="latin1")
 snrs,mods = map(lambda j: sorted(list(set(map(lambda x: x[j], Xd.keys())))), [1,0])
 X = []  
 lbl = []
