@@ -7,16 +7,15 @@ Created on Fri Jan 10 21:33:49 2019
 """
 
 #===========================IMPORT STUFFS================================
-import pandas as pd
-import numpy as np 
-import matplotlib.pyplot as plt
+import numpy as np
 import os
 
-%matplotlib inline
 import _pickle as cPickle
 from resnets_utils import *
 from resnet_implementation import ResNet18
 
+import keras
+from keras.models import Model
 from keras import applications
 from keras.layers import Dense, Dropout
 
@@ -73,7 +72,7 @@ num_classes = len(classes)
 
 #===========================BUILD THE RESNET18 MODEL================================
 
-base_model = ResNet18(in_shp, num_classes)
+base_model = ResNet18(input_shape, num_classes)
 x = base_model.output
 x = Dropout(0.7)(x)
 predictions = Dense(num_classes, activation= 'softmax')(x)
@@ -100,6 +99,6 @@ history = model.fit(X_train,
     verbose=2,
     validation_data=(X_test, Y_test),
     callbacks = [
-        keras.callbacks.ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=True, mode='auto')
-    ])
+        keras.callbacks.ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=True, mode='auto'),
+	keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='auto'])
 
