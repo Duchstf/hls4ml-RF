@@ -16,7 +16,7 @@ import keras.models as models
 from keras.layers.core import Reshape,Dense,Dropout,Activation,Flatten
 from keras.layers.noise import GaussianNoise
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D
-from keras.layers.convolutional import Conv2D
+from keras.layers.convolutional import Conv2D, Conv1D
 from keras.regularizers import *
 from keras.optimizers import adam
 import matplotlib.pyplot as plt
@@ -27,7 +27,7 @@ import random, sys, keras
 
 # Prepare the training data
 # You will need to seperately download or generate this file
-Xd = cPickle.load(open("RML2016.10a_dict.pkl",'rb'), encoding="latin1")
+Xd = cPickle.load(open("../RML2016.10a_dict.pkl",'rb'), encoding="latin1")
 snrs,mods = map(lambda j: sorted(list(set(map(lambda x: x[j], Xd.keys())))), [1,0])
 X = []  
 lbl = []
@@ -56,9 +56,16 @@ def to_onehot(yy):
 Y_train = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), train_idx)))
 Y_test = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), test_idx)))
 
-#Add empty dimension at the end for CONV input layer
-X_train = X_train.reshape(X_train.shape + (1,))
-X_test = X_test.reshape(X_test.shape + (1,))
+#Flip the last two dimensions
+X_train = X_train.reshape((X_train.shape[0],X_train.shape[2],X_train.shape[1]))
+X_test = X_test.reshape((X_test.shape[0],X_test.shape[2],X_test.shape[1]))
+
+print ("number of training examples = " + str(X_train.shape[0]))
+print ("number of test examples = " + str(X_test.shape[0]))
+print ("X_train shape: " + str(X_train.shape))
+print ("Y_train shape: " + str(Y_train.shape))
+print ("X_test shape: " + str(X_test.shape))
+print ("Y_test shape: " + str(Y_test.shape))
 
 in_shape = list(X_train.shape[1:])
 print("X_train shape: ", X_train.shape)
@@ -72,28 +79,20 @@ print("Preparing the model ...")
 print("Input shape ", in_shape)
 print("Using Keras version: ", keras.__version__)
 
-# Larger network with conv layers
+# Conv1d model
+dr = 0.5 # dropout rate (%)
 model = models.Sequential()
-model.add(Conv2D(32, (3, 3), input_shape=in_shape, padding='valid', data_format="channels_last", activation="relu", name="conv1", kernel_initializer='glorot_uniform'))
-model.add(Conv2D(32, (3, 3), padding='valid', data_format="channels_last", activation="relu", name="conv2", kernel_initializer='glorot_uniform'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-
-model.add(Conv2D(64, (3, 3), padding='valid', data_format="channels_last", activation="relu", name="conv3", kernel_initializer='glorot_uniform'))
-model.add(Conv2D(64, (3, 3),padding='valid', data_format="channels_last", activation="relu", name="conv4", kernel_initializer='glorot_uniform'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-
+model.add(Conv1D(200, 10, padding='valid', activation="relu", name="conv1", kernel_initializer='glorot_uniform', input_shape=in_shape))
+model.add(Dropout(dr))
+model.add(Conv1D(100, 10, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'))
+model.add(Dropout(dr))
 model.add(Flatten())
-model.add(Dense(512, activation='relu', kernel_initializer='he_normal', name="dense1"))
-model.add(Dropout(0.5))
-model.add(Dense(num_classes))
+model.add(Dense(128, activation='relu', kernel_initializer='he_normal', name="dense1"))
+model.add(Dropout(dr))
+model.add(Dense( len(classes), kernel_initializer='he_normal', name="dense2" ))
 model.add(Activation('softmax'))
 
-# initiate RMSprop optimizer
-opt = keras.optimizers.RMSprop(learning_rate=0.0001, decay=1e-6)
-
-model.compile(loss='categorical_crossentropy', optimizer=opt, metrics = ["accuracy"])
+model.compile(loss='categorical_crossentropy', optimizer="adam", metrics = ["accuracy"])
 model.summary()
 
 # Save the model architecture
