@@ -15,7 +15,7 @@ from keras.utils import np_utils
 import keras.models as models
 from keras.layers.core import Reshape,Dense,Dropout,Activation,Flatten
 from keras.layers.noise import GaussianNoise
-from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D
+from keras.layers.convolutional import Convolution2D, MaxPooling1D, ZeroPadding2D
 from keras.layers.convolutional import Conv2D, Conv1D
 from keras.regularizers import *
 from keras.optimizers import adam
@@ -82,10 +82,13 @@ print("Using Keras version: ", keras.__version__)
 # Conv1d model
 dr = 0.5 # dropout rate (%)
 model = models.Sequential()
-model.add(Conv1D(200, 10, padding='valid', activation="relu", name="conv1", kernel_initializer='glorot_uniform', input_shape=in_shape))
+model.add(Conv1D(256, 10, padding='valid', activation="relu", name="conv1", kernel_initializer='glorot_uniform', input_shape=in_shape))
 model.add(Dropout(dr))
-model.add(Conv1D(100, 10, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'))
+model.add(Conv1D(128, 10, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'))
+model.add(Conv1D(128, 10, padding='valid', activation="relu", name="conv3", kernel_initializer='glorot_uniform'))
 model.add(Dropout(dr))
+model.add(Conv1D(64, 10, padding='valid', activation="relu", name="conv4", kernel_initializer='glorot_uniform'))
+model.add(MaxPooling1D(2))
 model.add(Flatten())
 model.add(Dense(128, activation='relu', kernel_initializer='he_normal', name="dense1"))
 model.add(Dropout(dr))
@@ -96,16 +99,16 @@ model.compile(loss='categorical_crossentropy', optimizer="adam", metrics = ["acc
 model.summary()
 
 # Save the model architecture
-with open('./model/v2-RF-CNN-full.json', 'w') as f:
+with open('./model/v2.5-RF-CNN-full.json', 'w') as f:
     f.write(model.to_json())
 
 #================TRAIN THE MODEL====================
 
 # Set up some params 
-nb_epoch = 50     # number of epochs to train on
+nb_epoch = 70    # number of epochs to train on
 batch_size = 1024  # training batch size
 
-filepath = 'model/v2-RF-CNN-full.h5'
+filepath = 'model/v2.5-RF-CNN-full.h5'
 
 history = model.fit(X_train,
     Y_train,
