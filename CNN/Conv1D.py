@@ -41,7 +41,7 @@ X = np.vstack(X)
 # while keeping SNR and Mod labels handy for each
 np.random.seed(2016)
 n_examples = X.shape[0]
-n_train = int(n_examples * 0.5)
+n_train = int(n_examples * 0.8)
 train_idx = np.random.choice(range(0,n_examples), size=n_train, replace=False)
 test_idx = list(set(range(0,n_examples))-set(train_idx))
 X_train = X[train_idx]
@@ -104,7 +104,7 @@ with open('./model/Conv1D-full.json', 'w') as f:
 #================TRAIN THE MODEL====================
 
 # Set up some params 
-nb_epoch = 70    # number of epochs to train on
+nb_epoch = 50    # number of epochs to train on
 batch_size = 1024  # training batch size
 
 filepath = 'model/Conv1D-full.h5'
