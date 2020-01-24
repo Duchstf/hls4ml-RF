@@ -26,7 +26,7 @@ import random, sys, keras
 
 # Prepare the training data
 # You will need to seperately download or generate this file
-Xd = cPickle.load(open("../RML2016.10a_dict.pkl",'rb'), encoding="latin1")
+Xd = cPickle.load(open("RML2016.10a_dict.pkl",'rb'), encoding="latin1")
 snrs,mods = map(lambda j: sorted(list(set(map(lambda x: x[j], Xd.keys())))), [1,0])
 X = []  
 lbl = []
@@ -36,15 +36,20 @@ for mod in mods:
         for i in range(Xd[(mod,snr)].shape[0]):  lbl.append((mod,snr))
 X = np.vstack(X)
 
-# Partition the data
-# into training and test sets of the form we can train/test on 
-# while keeping SNR and Mod labels handy for each
+# Partition the data into training, validation, and test sets while keeping SNR and Mod labels handy for each
 np.random.seed(2016)
+
+#Number of samples
 n_examples = X.shape[0]
-n_train = int(n_examples * 0.8)
+n_train = int(n_examples * 0.6)
+n_val = int(n_examples * 0.2)
+
 train_idx = np.random.choice(range(0,n_examples), size=n_train, replace=False)
-test_idx = list(set(range(0,n_examples))-set(train_idx))
+val_idx = np.random.choice(list(set(range(0,n_examples))-set(train_idx)), size=n_val, replace=False)
+test_idx = list(set(range(0,n_examples))-set(train_idx)-set(val_idx))
+
 X_train = X[train_idx]
+X_val = X[val_idx]
 X_test =  X[test_idx]
 
 def to_onehot(yy):
@@ -53,23 +58,35 @@ def to_onehot(yy):
     return yy1
 
 Y_train = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), train_idx)))
+Y_val = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), val_idx)))
 Y_test = to_onehot(list(map(lambda x: mods.index(lbl[x][0]), test_idx)))
 
 #Flip the last two dimensions
 X_train = X_train.reshape((X_train.shape[0],X_train.shape[2],X_train.shape[1]))
+X_val = X_val.reshape((X_val.shape[0],X_val.shape[2],X_val.shape[1]))
 X_test = X_test.reshape((X_test.shape[0],X_test.shape[2],X_test.shape[1]))
 
+#Print out the shapes for different datasets
+print ("Total number of samples: ", X.shape[0])
 print ("number of training examples = " + str(X_train.shape[0]))
+print ("number of validation examples = " + str(X_val.shape[0]))
 print ("number of test examples = " + str(X_test.shape[0]))
+
 print ("X_train shape: " + str(X_train.shape))
 print ("Y_train shape: " + str(Y_train.shape))
+
+print ("X_val shape: " + str(X_val.shape))
+print ("Y_val shape: " + str(Y_val.shape))
+
 print ("X_test shape: " + str(X_test.shape))
 print ("Y_test shape: " + str(Y_test.shape))
 
+#Input shape and number of classes
 in_shape = list(X_train.shape[1:])
-print("X_train shape: ", X_train.shape)
 classes = mods
 num_classes = len(classes)
+
+print("X_train shape: ", X_train.shape)
 print("Number of classes: ", num_classes)
 
 #================BUILD THE MODEL====================
@@ -114,7 +131,7 @@ history = model.fit(X_train,
     batch_size=batch_size,
     epochs=nb_epoch,
     verbose=2,
-    validation_data=(X_test, Y_test),
+    validation_data=(X_val, Y_val),
     callbacks = [
         keras.callbacks.ModelCheckpoint(filepath, monitor='val_loss', verbose=0, save_best_only=True, mode='auto'),
         keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='auto')
