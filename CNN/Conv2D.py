@@ -27,7 +27,7 @@ import random, sys, keras
 
 # Prepare the training data
 # You will need to seperately download or generate this file
-Xd = cPickle.load(open("RML2016.10a_dict.pkl",'rb'), encoding="latin1")
+Xd = cPickle.load(open("../RML2016.10a_dict.pkl",'rb'), encoding="latin1")
 snrs,mods = map(lambda j: sorted(list(set(map(lambda x: x[j], Xd.keys())))), [1,0])
 X = []  
 lbl = []
@@ -89,7 +89,7 @@ model.add(Dense(128, activation='relu', kernel_initializer='he_normal', name="de
 model.add(Dropout(dr))
 model.add(Dense( len(classes), kernel_initializer='he_normal', name="dense2" ))
 model.add(Activation('softmax'))
-model.compile(loss='categorical_crossentropy', optimizer='adam')
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics = ["accuracy"])
 model.summary()
 
 # Save the model architecture
