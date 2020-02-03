@@ -1,46 +1,29 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Created on Fri Sep 20 11:00:45 2019
+Created on Wed Sep 18 21:33:49 2019
 @author: duc_hoang
 """
-import os,random
-os.environ["KERAS_BACKEND"] = "tensorflow"
-import tensorflow as tf
-import tensorboard
-import tensorflow.keras as keras
 
-from tensorflow.keras.models import model_from_json
-from tensorflow_model_optimization.sparsity import keras as sparsity
-import keras.models as models
-
-from keras.utils import np_utils
-import keras.models as models
-from keras.regularizers import *
-from keras.optimizers import adam
-import matplotlib.pyplot as plt
+import os,random, sys
 import _pickle as cPickle
 import numpy as np
 
-from qkeras import QActivation
-from qkeras import QDense
-from qkeras import quantized_bits
+import argparse
 
-import tempfile
-logdir = tempfile.mkdtemp()
+from tensorflow.keras.layers import Input, Activation, Dropout, Flatten, MaxPooling1D
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.utils import to_categorical
 
-def print_model_to_json(keras_model, outfile_name):
-    outfile = open(outfile_name,'w')
-    jsonString = keras_model.to_json()
-    import json
-    with outfile:
-        obj = json.loads(jsonString)
-        json.dump(obj, outfile, sort_keys=True,indent=4, separators=(',', ': '))
-        outfile.write('\n')
+#Use Qkeras for quantized layers
+from qkeras import *
 
 #==================PREPARE DATA=====================
 
 # Prepare the training data
 # You will need to seperately download or generate this file
-Xd = cPickle.load(open("RML2016.10a_dict.pkl",'rb'), encoding="latin1")
+Xd = cPickle.load(open("../RML2016.10a_dict.pkl",'rb'), encoding="latin1")
 snrs,mods = map(lambda j: sorted(list(set(map(lambda x: x[j], Xd.keys())))), [1,0])
 X = []  
 lbl = []
@@ -95,82 +78,103 @@ print ("Y_val shape: " + str(Y_val.shape))
 print ("X_test shape: " + str(X_test.shape))
 print ("Y_test shape: " + str(Y_test.shape))
 
-#Input shape and number of classes
-in_shape = list(X_train.shape[1:])
+#Set up training parameters
 classes = mods
-num_classes = len(classes)
+IN_SHAPE = list(X_train.shape[1:])
+NUM_CLASSES = len(classes)
+OPTIMIZER = Adam()
+NB_EPOCH = 50
+BATCH_SIZE = 1024
 
 print("X_train shape: ", X_train.shape)
-print("Number of classes: ", num_classes)
+print("Number of classes: ", NUM_CLASSES)
 
-#==================DEFINE THE MODEL=====================
+#================BUILD THE MODEL====================
 
-def prune_Conv1D(final_sparsity):
-    # Set up some params 
-    nb_epoch = 50     # number of epochs to train on
-    batch_size = 1024  # training batch size
-    initial_sparsity = 0.0
-    num_train_samples = X_train.shape[0]
-    end_step = np.ceil(1.0 * num_train_samples / batch_size).astype(np.int32) * nb_epoch
-    print("End step: ", end_step)
+print("Preparing the model ...")
+print("Input shape ", in_shape)
+print("Using Keras version: ", keras.__version__)
 
-    pruning_params = {
-        'pruning_schedule': sparsity.PolynomialDecay(initial_sparsity=initial_sparsity,
-                                                     final_sparsity=final_sparsity,
-                                                     begin_step=0,
-                                                     end_step=end_step,
-                                                     frequency=100)
-    }
+# Quantized Conv1D Model 
+def QConv1D_model(weights_f, load_weights = False):
+    """Construc QConv1D model"""
+    x = x_in = Input(IN_SHAPE, name="input")
+    X = QConv1D(filters=128, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_1")(x)
+    x = QActivation("quantized_relu(3)")(x)
+    X = QConv1D(filters=128, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_2")(x)
+    x = QActivation("quantized_relu(3)")(x)
+    x = MaxPooling1D(pool_size=2)(x)
+    X = QConv1D(filters=64, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_3")(x)
+    x = QActivation("quantized_relu(3)")(x)
+    X = QConv1D(filters=64, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_4")(x)
+    x = QActivation("quantized_relu(3)")(x)
+    x = Dropout(0.5)(x)
+    X = QConv1D(filters=32, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_5")(x)
+    x = QActivation("quantized_relu(3)")(x)
+    X = QConv1D(filters=32, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_6")(x)
+    x = QActivation("quantized_relu(3)")(x)
+    x = Dropout(0.5)(x)
+    x = MaxPooling1D(pool_size=2)(x)
+    x = Flatten()(x)
+    x = QDense(128, kernel_quantizer=quantized_bits(3), bias_quantizer=quantized_bits(3))(x)
+    x = QActivation("quantized_relu(3)")(x)
+    x = QDense(NUM_CLASSES, kernel_quantizer=quantized_bits(3), bias_quantizer=quantized_bits(3))(x)
+    x = QActivation("quantized_bits(20, 5)")(x)
+    x = Activation("softmax")(x)
 
-    l = tf.keras.layers
-    dr = 0.5 # dropout rate (%)
-    pruned_model = tf.keras.Sequential([
-            sparsity.prune_low_magnitude(l.Conv1D(128, 3, padding='valid', activation="relu", name="conv1", kernel_initializer='glorot_uniform',input_shape=in_shp), **pruning_params),
-            sparsity.prune_low_magnitude(l.Conv1D(128, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
-            l.MaxPool1D(2),
-            sparsity.prune_low_magnitude(l.Conv1D(64, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
-            sparsity.prune_low_magnitude(l.Conv1D(64, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
-            l.Dropout(dr),
-            sparsity.prune_low_magnitude(l.Conv1D(32, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
-            sparsity.prune_low_magnitude(l.Conv1D(32, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
-            l.Dropout(dr),
-            l.MaxPool1D(2),
-            l.Flatten(),
-            sparsity.prune_low_magnitude(l.Dense(128, activation='relu', kernel_initializer='he_normal', name="dense1"), **pruning_params),
-            sparsity.prune_low_magnitude(l.Dense(len(classes), kernel_initializer='he_normal', name="dense2" ), **pruning_params),
-            l.Activation('softmax') 
-            ])
+    model = Model(inputs=[x_in], outputs=[x])
+    model.summary()
+    model.compile(loss="categorical_crossentropy", optimizer=OPTIMIZER, metrics=["accuracy"])
 
-    pruned_model.compile(loss='categorical_crossentropy', optimizer='adam', metrics = ["accuracy"])
+    if load_weights and weights_f:
+        model.load_weights(weights_f)
 
-    pruned_model.summary()
+    print_qstats(model)
+    return model
+
+def UseNetwork(weights_f, load_weights=False, save_model = True):
+  
+    """Use Conv1D Model.
+    Args:
+        weights_f: weight file location.
+        load_weights: load weights when it is True.
+    """
+
+    model = QConv1D_model(weights_f, load_weights)
+
+    if not load_weights:
+        model.fit(X_train, Y_train,
+                batch_size=BATCH_SIZE,
+                epochs=NB_EPOCH,
+                verbose=2,
+                validation_data=(X_val, Y_val),
+                callbacks = [keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='auto'])
+    
+    if weights_f:
+        model.save_weights(weights_f)
+    
+    if save_model:
+        model.save("./model/QConv1D.h5")
+    
+
+    score = model.evaluate(x_test_, y_test_, verbose=VERBOSE)
+    print_qstats(model)
+    print("Test score:", score[0])
+    print("Test accuracy:", score[1])
 
 
+def ParserArgs():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-l", "--load_weight", default="0",
+                        help="""load weights directly from file.
+                                0 is to disable and train the network.""")
+    parser.add_argument("-w", "--weight_file", default=None)
+    parser.add_argument("-s", "--save_model", default=None)
+    a = parser.parse_args()
+    return a
 
-    callbacks = [sparsity.UpdatePruningStep(),
-                 sparsity.PruningSummaries(log_dir=logdir, profile_batch=0)
-    ]
 
-    history = pruned_model.fit(X_train, Y_train,
-                               batch_size=batch_size,
-                               epochs=nb_epoch,
-                               verbose=1,
-                               validation_data=(X_val, Y_val),
-                               callbacks=callbacks)
-
-    score = pruned_model.evaluate(X_test, Y_test, verbose=0)
-
-    print("Test loss: ", score)
-
-    #Save the model
-    pruned_model = sparsity.strip_pruning(pruned_model)
-    pruned_model.summary()
-
-    # Save the model architecture
-    print_model_to_json(pruned_model, './model/{}.json'.format("Conv1D-" + str(final_sparsity)))
-
-    # Save the weights
-    pruned_model.save_weights('./model/{}.h5'.format("Conv1D-" + str(final_sparsity)))
-
-#==================TRAIN=====================
-prune_Conv1D(0.9)
+if __name__ == "__main__":
+  args = ParserArgs()
+  lw = False if args.load_weight == "0" else True
+  UseNetwork(args.weight_file, load_weights=lw, args.save_model)
