@@ -40,7 +40,7 @@ def print_model_to_json(keras_model, outfile_name):
 
 # Prepare the training data
 # You will need to seperately download or generate this file
-Xd = cPickle.load(open("RML2016.10a_dict.pkl",'rb'), encoding="latin1")
+Xd = cPickle.load(open("../RML2016.10a_dict.pkl",'rb'), encoding="latin1")
 snrs,mods = map(lambda j: sorted(list(set(map(lambda x: x[j], Xd.keys())))), [1,0])
 X = []  
 lbl = []
@@ -105,11 +105,10 @@ print("Number of classes: ", num_classes)
 
 #==================DEFINE THE MODEL=====================
 
-def prune_Conv1D(final_sparsity):
+def prune_Conv1D(final_sparsity, initial_sparsity = 0.0, begin_step = 0, frequency = 100, version = ""):
     # Set up some params 
     nb_epoch = 50     # number of epochs to train on
-    batch_size = 1024  # training batch size
-    initial_sparsity = 0.0
+    batch_size = 1024  # training batch size 
     num_train_samples = X_train.shape[0]
     end_step = np.ceil(1.0 * num_train_samples / batch_size).astype(np.int32) * nb_epoch
     print("End step: ", end_step)
@@ -117,7 +116,7 @@ def prune_Conv1D(final_sparsity):
     pruning_params = {
         'pruning_schedule': sparsity.PolynomialDecay(initial_sparsity=initial_sparsity,
                                                      final_sparsity=final_sparsity,
-                                                     begin_step=0,
+                                                     begin_step=begin_step,
                                                      end_step=end_step,
                                                      frequency=100)
     }
@@ -125,14 +124,14 @@ def prune_Conv1D(final_sparsity):
     l = tf.keras.layers
     dr = 0.5 # dropout rate (%)
     pruned_model = tf.keras.Sequential([
-            sparsity.prune_low_magnitude(l.Conv1D(128, 3, padding='valid', activation="relu", name="conv1", kernel_initializer='glorot_uniform',input_shape=in_shp), **pruning_params),
+            sparsity.prune_low_magnitude(l.Conv1D(128, 3, padding='valid', activation="relu", name="conv1", kernel_initializer='glorot_uniform',input_shape=in_shape), **pruning_params),
             sparsity.prune_low_magnitude(l.Conv1D(128, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
             l.MaxPool1D(2),
-            sparsity.prune_low_magnitude(l.Conv1D(64, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
-            sparsity.prune_low_magnitude(l.Conv1D(64, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
+            sparsity.prune_low_magnitude(l.Conv1D(64, 3, padding='valid', activation="relu", name="conv3", kernel_initializer='glorot_uniform'), **pruning_params),
+            sparsity.prune_low_magnitude(l.Conv1D(64, 3, padding='valid', activation="relu", name="conv4", kernel_initializer='glorot_uniform'), **pruning_params),
             l.Dropout(dr),
-            sparsity.prune_low_magnitude(l.Conv1D(32, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
-            sparsity.prune_low_magnitude(l.Conv1D(32, 3, padding='valid', activation="relu", name="conv2", kernel_initializer='glorot_uniform'), **pruning_params),
+            sparsity.prune_low_magnitude(l.Conv1D(32, 3, padding='valid', activation="relu", name="conv5", kernel_initializer='glorot_uniform'), **pruning_params),
+            sparsity.prune_low_magnitude(l.Conv1D(32, 3, padding='valid', activation="relu", name="conv6", kernel_initializer='glorot_uniform'), **pruning_params),
             l.Dropout(dr),
             l.MaxPool1D(2),
             l.Flatten(),
@@ -167,10 +166,10 @@ def prune_Conv1D(final_sparsity):
     pruned_model.summary()
 
     # Save the model architecture
-    print_model_to_json(pruned_model, './model/{}.json'.format("Conv1D-" + str(final_sparsity)))
+    print_model_to_json(pruned_model, './model/Conv1D-{}.json'.format(str(final_sparsity) + version))
 
     # Save the weights
-    pruned_model.save_weights('./model/{}.h5'.format("Conv1D-" + str(final_sparsity)))
+    pruned_model.save_weights('./model/Conv1D-{}.h5'.format(str(final_sparsity) + version))
 
 #==================TRAIN=====================
-prune_Conv1D(0.9)
+prune_Conv1D(initial_sparsity = 0.0, final_sparsity = 0.85, begin_step = 2500, version = "v1", frequency = 150)
