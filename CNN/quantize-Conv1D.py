@@ -11,6 +11,7 @@ import numpy as np
 
 import argparse
 
+import keras
 from tensorflow.keras.layers import Input, Activation, Dropout, Flatten, MaxPooling1D
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
@@ -82,9 +83,10 @@ print ("Y_test shape: " + str(Y_test.shape))
 classes = mods
 IN_SHAPE = list(X_train.shape[1:])
 NUM_CLASSES = len(classes)
-OPTIMIZER = Adam()
+OPTIMIZER = Adam(lr=0.001, decay=0.0002)
 NB_EPOCH = 50
 BATCH_SIZE = 1024
+VERBOSE = 0
 
 print("X_train shape: ", X_train.shape)
 print("Number of classes: ", NUM_CLASSES)
@@ -92,47 +94,47 @@ print("Number of classes: ", NUM_CLASSES)
 #================BUILD THE MODEL====================
 
 print("Preparing the model ...")
-print("Input shape ", in_shape)
-print("Using Keras version: ", keras.__version__)
+print("Input shape ", IN_SHAPE)
 
 # Quantized Conv1D Model 
 def QConv1D_model(weights_f, load_weights = False):
     """Construc QConv1D model"""
     x = x_in = Input(IN_SHAPE, name="input")
-    X = QConv1D(filters=128, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_1")(x)
-    x = QActivation("quantized_relu(3)")(x)
-    X = QConv1D(filters=128, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_2")(x)
-    x = QActivation("quantized_relu(3)")(x)
+    x = QConv1D(filters=128, kernel_size=3, kernel_quantizer = quantized_bits(bits=15, integer=4, symmetric=0, keep_negative=1), bias_quantizer = ternary(), name="conv1d_1", kernel_initializer='glorot_uniform')(x)
+    x = QActivation("quantized_relu(20, 3)")(x)
+    x = QConv1D(filters=128, kernel_size=3, kernel_quantizer=quantized_bits(bits=15, integer=4, symmetric=0, keep_negative=1), bias_quantizer=ternary(), name="conv1d_2", kernel_initializer='glorot_uniform')(x)
+    x = QActivation("quantized_relu(20, 3)")(x)
     x = MaxPooling1D(pool_size=2)(x)
-    X = QConv1D(filters=64, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_3")(x)
-    x = QActivation("quantized_relu(3)")(x)
-    X = QConv1D(filters=64, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_4")(x)
-    x = QActivation("quantized_relu(3)")(x)
+    x = QConv1D(filters=64, kernel_size=3, kernel_quantizer=quantized_bits(bits=15, integer=3, symmetric=0, keep_negative=1), bias_quantizer=ternary(), name="conv1d_3", kernel_initializer='glorot_uniform')(x)
+    x = QActivation("quantized_relu(15, 2)")(x)
+    x = QConv1D(filters=64, kernel_size=3, kernel_quantizer=quantized_bits(bits=15, integer=3, symmetric=0, keep_negative=1), bias_quantizer=ternary(), name="conv1d_4", kernel_initializer='glorot_uniform')(x)
+    x = QActivation("quantized_relu(15, 2)")(x)
     x = Dropout(0.5)(x)
-    X = QConv1D(filters=32, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_5")(x)
-    x = QActivation("quantized_relu(3)")(x)
-    X = QConv1D(filters=32, kernel_size=3, kernel_quantizer="stochastic_ternary", bias_quantizer="ternary", name="conv1d_6")(x)
-    x = QActivation("quantized_relu(3)")(x)
+    X = QConv1D(filters=32, kernel_size=3, kernel_quantizer=quantized_bits(bits=15, integer=4, symmetric=0, keep_negative=1), bias_quantizer=ternary(), name="conv1d_5", kernel_initializer='glorot_uniform')(x)
+    x = QActivation("quantized_relu(15, 2)")(x)
+    x = QConv1D(filters=32, kernel_size=3, kernel_quantizer=quantized_bits(bits=15, integer=4, symmetric=0, keep_negative=1), bias_quantizer=ternary(), name="conv1d_6", kernel_initializer='glorot_uniform')(x)
+    x = QActivation("quantized_relu(15, 2)")(x)
     x = Dropout(0.5)(x)
     x = MaxPooling1D(pool_size=2)(x)
     x = Flatten()(x)
-    x = QDense(128, kernel_quantizer=quantized_bits(3), bias_quantizer=quantized_bits(3))(x)
-    x = QActivation("quantized_relu(3)")(x)
-    x = QDense(NUM_CLASSES, kernel_quantizer=quantized_bits(3), bias_quantizer=quantized_bits(3))(x)
+    x = QDense(128, kernel_quantizer=quantized_bits(15, 3), bias_quantizer=quantized_bits(3), kernel_initializer='he_normal')(x)
+    x = QActivation("quantized_relu(20, 3)")(x)
+    x = QDense(NUM_CLASSES, kernel_quantizer=quantized_bits(20), bias_quantizer=quantized_bits(3), kernel_initializer='he_normal')(x)
     x = QActivation("quantized_bits(20, 5)")(x)
     x = Activation("softmax")(x)
 
     model = Model(inputs=[x_in], outputs=[x])
+    print_qstats(model)
     model.summary()
     model.compile(loss="categorical_crossentropy", optimizer=OPTIMIZER, metrics=["accuracy"])
 
     if load_weights and weights_f:
         model.load_weights(weights_f)
 
-    print_qstats(model)
+    #print_qstats(model)
     return model
 
-def UseNetwork(weights_f, load_weights=False, save_model = True):
+def UseNetwork(weights_f, load_weights=False, save_model = True, version = "v1"):
   
     """Use Conv1D Model.
     Args:
@@ -143,21 +145,22 @@ def UseNetwork(weights_f, load_weights=False, save_model = True):
     model = QConv1D_model(weights_f, load_weights)
 
     if not load_weights:
+        filepath = 'model/QConv1D-weight-{}.h5'.format(version)
         model.fit(X_train, Y_train,
                 batch_size=BATCH_SIZE,
                 epochs=NB_EPOCH,
                 verbose=2,
                 validation_data=(X_val, Y_val),
-                callbacks = [keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='auto'])
-    
+                callbacks = [keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='auto')])
+
     if weights_f:
         model.save_weights(weights_f)
     
     if save_model:
-        model.save("./model/QConv1D.h5")
-    
+        print("Saving the model ...")
+        model.save("./model/QConv1D-{}.h5".format(version))
 
-    score = model.evaluate(x_test_, y_test_, verbose=VERBOSE)
+    score = model.evaluate(X_test, Y_test, verbose=VERBOSE)
     print_qstats(model)
     print("Test score:", score[0])
     print("Test accuracy:", score[1])
@@ -169,7 +172,7 @@ def ParserArgs():
                         help="""load weights directly from file.
                                 0 is to disable and train the network.""")
     parser.add_argument("-w", "--weight_file", default=None)
-    parser.add_argument("-s", "--save_model", default=None)
+    parser.add_argument("-s", "--save_model", default="1")
     a = parser.parse_args()
     return a
 
@@ -177,4 +180,5 @@ def ParserArgs():
 if __name__ == "__main__":
   args = ParserArgs()
   lw = False if args.load_weight == "0" else True
-  UseNetwork(args.weight_file, load_weights=lw, args.save_model)
+  save_model = True if args.save_model == "1" else False
+  UseNetwork(args.weight_file, save_model = save_model, load_weights=lw)
